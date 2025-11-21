@@ -6559,7 +6559,11 @@ Zosterops virens_Cape White-eye
         `; 
         // ... (You must replace the list above with your full file)
         
-        const labels = labelData.trim().split('\n').map(s => s.trim());
+        // Split by newline, then split by '_' and take the second part (Common Name)
+const labels = labelData.trim().split('\n').map(s => {
+    const parts = s.trim().split('_');
+    return parts.length > 1 ? parts[1] : s.trim();
+});
         let html5QrcodeScanner;
 
         function startScanner() {
@@ -6642,4 +6646,5 @@ Zosterops virens_Cape White-eye
         }
     </script>
 </body>
+
 </html>

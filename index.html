@@ -29,9 +29,8 @@
 
     <script>
         // ==========================================
-        // 1. PASTE YOUR LABELS HERE
-        // Copy the contents of en_us.txt and paste them inside the backticks below.
-        // Format should be one bird per line.
+        // 1. LABEL DATA
+        // PASTE YOUR FULL LIST FROM THE PI HERE
         // ==========================================
         const labelData = `
 Abroscopus albogularis_Rufous-faced Warbler
@@ -6558,12 +6557,15 @@ Zosterops simplex_Swinhoe's White-eye
 Zosterops virens_Cape White-eye
         `; 
         // ... (You must replace the list above with your full file)
-        
-        // Split by newline, then split by '_' and take the second part (Common Name)
-const labels = labelData.trim().split('\n').map(s => {
-    const parts = s.trim().split('_');
-    return parts.length > 1 ? parts[1] : s.trim();
-});
+
+        // ==========================================
+
+        // Process list: Split by newline, remove whitespace, strip scientific prefix
+        const labels = labelData.trim().split('\n').map(s => {
+            const parts = s.trim().split('_');
+            return parts.length > 1 ? parts[1] : s.trim();
+        });
+
         let html5QrcodeScanner;
 
         function startScanner() {
@@ -6594,57 +6596,70 @@ const labels = labelData.trim().split('\n').map(s => {
 
         function onScanSuccess(decodedText, decodedResult) {
             stopScanner();
-            decodeBinaryData(decodedText);
+            // --- CHANGE: Call the Base64 decoder ---
+            decodeBase64Data(decodedText);
         }
 
         function onScanFailure(error) {
             // Handle scan failure, usually better to ignore and keep scanning.
         }
 
-        function decodeBinaryData(rawString) {
+        // --- NEW: Base64 Decoding Function ---
+        function decodeBase64Data(b64String) {
             const resultsDiv = document.getElementById('results');
             document.getElementById('result-header').style.display = 'block';
             resultsDiv.innerHTML = "";
 
-            // The rawString from the QR lib comes in as a binary string (Latin-1)
-            // Each "character" is actually a byte value (0-255)
-            
-            // We process 5 bytes at a time
-            for (let i = 0; i < rawString.length; i += 5) {
-                if (i + 4 >= rawString.length) break;
+            try {
+                // 1. Decode Base64 string into a binary string
+                // This converts the safe text back into raw bytes
+                const binaryString = atob(b64String);
 
-                // 1. Extract Bytes
-                const b0 = rawString.charCodeAt(i);
-                const b1 = rawString.charCodeAt(i+1);
-                const b2 = rawString.charCodeAt(i+2);
-                const b3 = rawString.charCodeAt(i+3);
-                const b4 = rawString.charCodeAt(i+4);
+                // We process 5 bytes at a time
+                for (let i = 0; i < binaryString.length; i += 5) {
+                    if (i + 4 >= binaryString.length) break;
 
-                // 2. Reconstruct Values (Big Endian)
-                const index = (b0 << 8) | b1;
-                const timeSec = (b2 << 8) | b3;
-                const confByte = b4;
+                    // 2. Extract Bytes
+                    const b0 = binaryString.charCodeAt(i);
+                    const b1 = binaryString.charCodeAt(i+1);
+                    const b2 = binaryString.charCodeAt(i+2);
+                    const b3 = binaryString.charCodeAt(i+3);
+                    const b4 = binaryString.charCodeAt(i+4);
 
-                // 3. Map to Data
-                const birdName = labels[index] || "Unknown Bird ID: " + index;
-                const confidence = Math.round((confByte / 255) * 100);
-                
-                // Format Time (MM:SS)
-                const mins = Math.floor(timeSec / 60);
-                const secs = timeSec % 60;
-                const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    // 3. Reconstruct Values (Big Endian)
+                    const index = (b0 << 8) | b1;
+                    const timeSec = (b2 << 8) | b3;
+                    const confByte = b4;
 
-                // 4. Render Card
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <span class="species">${birdName}</span>
-                    <span class="meta">Time: +${timeStr}s | Confidence: ${confidence}%</span>
-                `;
-                resultsDiv.appendChild(card);
+                    // 4. Map to Data
+                    let birdName = "Unknown";
+                    if (index < labels.length) {
+                        birdName = labels[index];
+                    } else {
+                        birdName = "ID Error: " + index;
+                    }
+                    
+                    const confidence = Math.round((confByte / 255) * 100);
+                    
+                    // Format Time (MM:SS)
+                    const mins = Math.floor(timeSec / 60);
+                    const secs = timeSec % 60;
+                    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+                    // 5. Render Card
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <span class="species">${birdName}</span>
+                        <span class="meta">Time: +${timeStr}s | Confidence: ${confidence}%</span>
+                    `;
+                    resultsDiv.appendChild(card);
+                }
+            } catch (e) {
+                alert("Error decoding QR. Make sure Python script is using Base64.");
+                console.error(e);
             }
         }
     </script>
 </body>
-
 </html>
